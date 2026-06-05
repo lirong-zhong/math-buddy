@@ -29,14 +29,17 @@ const Auth = (() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'verify_password', password })
     }).then(r => {
-      if (!r.ok) throw new Error('密码错误');
+      if (!r.ok) throw new Error('服务器连接失败，请稍后重试');
       return r.json();
     }).then(data => {
       if (data.valid) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ts: Date.now() }));
         return true;
       }
-      throw new Error('密码错误');
+      throw new Error('密码不正确，再试一次');
+    }).catch(e => {
+      if (e.message === '密码不正确，再试一次') throw e;
+      throw new Error('服务器连接失败，请稍后重试');
     });
   }
 
