@@ -1,4 +1,5 @@
 window.__MB_CONFIG__ = {
   SUPABASE_URL: 'https://cdcilqcwpdnbjrlqkfrm.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkY2lscWN3cGRuYmpybHFrZnJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MTA1NjcsImV4cCI6MjA5NjE4NjU2N30.XHL8LY8q9u1kdPrSLayv5lu0QOmecPkdl5tB6to65s0'
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkY2lscWN3cGRuYmpybHFrZnJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MTA1NjcsImV4cCI6MjA5NjE4NjU2N30.XHL8LY8q9u1kdPrSLayv5lu0QOmecPkdl5tB6to65s0',
+  SUPABASE_STORAGE_BASE: 'https://cdcilqcwpdnbjrlqkfrm.supabase.co/storage/v1/object/public/question-assets'
 };

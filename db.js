@@ -90,6 +90,27 @@ const DB = (() => {
     if (error) throw error;
   }
 
+  async function getQuestionSources() {
+    if (!client) return [];
+    const { data, error } = await client.from('question_bank_sources')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) { console.warn('getQuestionSources failed:', error); return []; }
+    return data || [];
+  }
+
+  async function getQuestionsBySource(sourceId) {
+    if (!client) return [];
+    const { data, error } = await client.from('questions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('bank_source_id', sourceId)
+      .order('id', { ascending: true });
+    if (error) { console.warn('getQuestionsBySource failed:', error); return []; }
+    return data || [];
+  }
+
   // ── 用户统计 ──
   async function getStats() {
     if (!client) return { streak: 0, todayDone: 0, todayCorrect: 0, errorStats: {} };
@@ -162,6 +183,8 @@ const DB = (() => {
     getErrorLogs,
     getErrorStats,
     getQuestionBanks,
+    getQuestionSources,
+    getQuestionsBySource,
     saveQuestionBank,
     deleteQuestionBank,
     getStats,

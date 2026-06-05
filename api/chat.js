@@ -27,14 +27,14 @@ export default async function handler(req, res) {
   // ── DeepSeek 代理 ──
   if (action === 'chat') {
     const apiKey = process.env.DEEPSEEK_API_KEY;
-    const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+    const model = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 
     if (!apiKey) {
       return res.status(500).json({ error: 'DeepSeek API key not configured on server' });
     }
 
     try {
-      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const resp = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

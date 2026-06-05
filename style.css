@@ -209,6 +209,25 @@ body {
 }
 .question-text { font-size: 22px; font-weight: 600; line-height: 1.6; margin-bottom: 8px; }
 .question-hint { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+.question-assets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.question-asset {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.question-asset-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+}
 
 /* Steps */
 .steps { display: flex; gap: 0; margin-bottom: 24px; }

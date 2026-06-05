@@ -1,15 +1,14 @@
-// ============================================================
-// app.js — 数学搭档 主应用逻辑
+﻿// ============================================================
+// app.js - main application logic
 // ============================================================
 
 const App = (() => {
-  // ── State ──
   const state = {
     questions: [],
     currentQ: 0,
     practiceStep: 1,
     messages: [],
-    errorLog: [],        // 本次 session 的错因记录
+    errorLog: [],
     sessionStats: { done: 0, correct: 0, saved: 0 },
     streak: 0,
     thoughtSent: false,
@@ -19,120 +18,214 @@ const App = (() => {
     customQuestion: null
   };
 
-  // ── Greetings ──
-  const greetings = ['你好！今天也来做题了，很棒！', '欢迎回来！准备好了吗？', '今天也一起加油！'];
+  const greetings = [
+    '你好！今天也来做题了，很棒！',
+    '欢迎回来！准备好了吗？',
+    '今天也一起加油！'
+  ];
 
-  // ── Init ──
-  async function init() {
-    document.getElementById('greetText').textContent = greetings[Math.floor(Math.random() * greetings.length)];
+  function normalizeQuestion(q) {
+    q = q || {};
+return {
+      text: q.text || '',
+      type: q.type || '五年级数学',
+      answer: q.answer || '',
+      explanation: q.explanation || '',
+      assets: Array.isArray(q.assets) ? q.assets : [],
+      answer_status: q.answer_status || '',
+      source: q.source || '',
+      grade: q.grade || '',
+      subject: q.subject || '数学',
+      curriculum: q.curriculum || '',
+      chapter: q.chapter || '',
+      tags: Array.isArray(q.tags) ? q.tags : [],
+      raw: q.raw || q
+    };
+  }
 
-    // Load stats from Supabase
-    try {
-      const stats = await DB.getStats();
-      state.streak = stats.streak;
-      state.sessionStats.done = stats.todayDone;
-      state.sessionStats.correct = stats.todayCorrect;
-      updateSidebarStats();
-      updateErrorSummaryFromData(stats.errorStats || {});
-      document.getElementById('statStreak').textContent = state.streak;
-    } catch (e) {
-      console.warn('Failed to load stats:', e);
+  function escapeHtml(text = '') {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizeText(text = '') {
+    return String(text)
+      .replace(/\s+/g, '')
+      .replace(/[，,。．\.、；;：:！？?!（）()【】\[\]{}<>＜＞“”"'\-—\u3000]/g, '')
+      .toLowerCase();
+  }
+
+  function resolveAssetSrc(asset) {
+    const value = typeof asset === 'string' ? asset : (asset?.url || asset?.path || '');
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:') || value.startsWith('blob:')) return value;
+    const storageBase = window.__MB_CONFIG__?.SUPABASE_STORAGE_BASE;
+    if (storageBase) {
+      return storageBase.replace(/\/$/, '') + '/' + value.replace(/^\//, '');
+    }
+    return value;
+  }
+
+  function renderQuestionAssets(assets = []) {
+    const host = document.getElementById('questionAssets');
+    if (!host) return;
+    if (!Array.isArray(assets) || !assets.length) {
+      host.innerHTML = '';
+      host.classList.add('hidden');
+      return;
+    }
+    host.classList.remove('hidden');
+    host.innerHTML = assets.map(asset => {
+      const src = resolveAssetSrc(asset);
+      if (!src) return '';
+      const alt = asset.alt || '题目配图';
+      return `
+        <div class="question-asset">
+          <img class="question-asset-img" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy">
+        </div>
+      `;
+    }).join('');
+  }
+
+  function showView(view) {
+    ['home', 'practice', 'upload', 'history', 'result', 'qbank'].forEach(name => {
+      const el = document.getElementById(`view-${name}`);
+      if (el) el.classList.toggle('hidden', name !== view);
+    });
+
+    ['nav-home', 'nav-practice', 'nav-history', 'nav-qbank'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('active');
+    });
+
+    if (view === 'home') document.getElementById('nav-home')?.classList.add('active');
+    if (view === 'practice') document.getElementById('nav-practice')?.classList.add('active');
+    if (view === 'history') {
+      document.getElementById('nav-history')?.classList.add('active');
+      renderHistory();
+    }
+    if (view === 'qbank') {
+      document.getElementById('nav-qbank')?.classList.add('active');
+      renderQBank();
     }
   }
 
-  // ── View switching ──
-  function showView(v) {
-    ['home','practice','upload','history','result','qbank'].forEach(x => {
-      const el = document.getElementById('view-'+x);
-      if (el) el.classList.toggle('hidden', x !== v);
-    });
-    ['nav-home','nav-practice','nav-history','nav-qbank'].forEach(x => {
-      const el = document.getElementById(x);
-      if (el) el.classList.remove('active');
-    });
-    if (v === 'home') document.getElementById('nav-home').classList.add('active');
-    if (v === 'practice') document.getElementById('nav-practice').classList.add('active');
-    if (v === 'history') { document.getElementById('nav-history').classList.add('active'); renderHistory(); }
-    if (v === 'qbank') { document.getElementById('nav-qbank').classList.add('active'); renderQBank(); }
+  async function init() {
+    const greet = document.getElementById('greetText');
+    if (greet) greet.textContent = greetings[Math.floor(Math.random() * greetings.length)];
+
+    try {
+      const stats = await DB.getStats();
+      state.streak = stats.streak || 0;
+      state.sessionStats.done = stats.todayDone || 0;
+      state.sessionStats.correct = stats.todayCorrect || 0;
+      document.getElementById('statStreak').textContent = String(state.streak);
+      updateSidebarStats();
+      updateErrorSummaryFromData(stats.errorStats || {});
+    } catch (error) {
+      console.warn('Failed to load stats:', error);
+    }
   }
 
-  // ── Start daily practice ──
+  function resetSession(title) {
+    state.currentQ = 0;
+    state.messages = [];
+    state.errorLog = [];
+    state.sessionStats = { done: 0, correct: 0, saved: 0 };
+    state.thoughtSent = false;
+    state.selectedError = null;
+    document.getElementById('practiceTitle').textContent = title;
+    document.getElementById('sessionBadge').classList.remove('hidden');
+    renderMessages();
+    renderQuestionAssets([]);
+    updateSidebarStats();
+  }
+
   async function startDaily() {
     showView('practice');
-    document.getElementById('practiceTitle').textContent = '今日练习';
-    document.getElementById('sessionBadge').classList.remove('hidden');
-    state.messages = [];
-    state.currentQ = 0;
-    state.sessionStats = { done: 0, correct: 0, saved: 0 };
-    state.customQuestion = null;
-    state.errorLog = [];
-    renderMessages();
+    resetSession('今日练习');
     await generateQuestions();
   }
 
-  // ── Start with custom question ──
   async function startWithCustom(text) {
-    if (!text) { alert('请先输入题目内容'); return; }
-    state.customQuestion = text;
-    state.questions = [{ text, type: '自定义题目', answer: null }];
-    state.currentQ = 0;
-    state.messages = [];
-    state.errorLog = [];
-    state.sessionStats = { done: 0, correct: 0, saved: 0 };
+    const value = String(text || '').trim();
+    if (!value) {
+      alert('请先输入题目内容');
+      return;
+    }
     showView('practice');
-    document.getElementById('practiceTitle').textContent = '老师的题目';
+    state.customQuestion = value;
+    state.questions = [normalizeQuestion({ text: value, type: '自定义题目', answer: '', explanation: '', assets: [] })];
+    resetSession('老师的题目');
     loadQuestion(0);
   }
 
-  // ── Start with question bank ──
   function startWithQBank(qbank) {
-    state.questions = qbank.questions;
-    state.currentQ = 0;
-    state.messages = [];
-    state.errorLog = [];
-    state.sessionStats = { done: 0, correct: 0, saved: 0 };
-    state.customQuestion = null;
+    const questions = Array.isArray(qbank) ? qbank : (qbank?.questions || []);
+    const title = qbank?.title || '题库练习';
     showView('practice');
-    document.getElementById('practiceTitle').textContent = qbank.title;
+    state.questions = questions.map(normalizeQuestion);
+    resetSession(title);
     loadQuestion(0);
   }
 
-  // ── Generate questions via DeepSeek ──
+  async function startWithQuestionSource(sourceId, title) {
+    try {
+      const questions = await DB.getQuestionsBySource(sourceId);
+      state.questions = (questions || []).map(normalizeQuestion);
+      showView('practice');
+      resetSession(title || '题库练习');
+      loadQuestion(0);
+    } catch (error) {
+      console.warn('startWithQuestionSource failed:', error);
+      alert('加载题库失败，请稍后再试');
+    }
+  }
+
   async function generateQuestions() {
-    document.getElementById('questionText').textContent = '正在出题，稍等一下…';
-    document.getElementById('questionHint').textContent = '';
+    const questionText = document.getElementById('questionText');
+    const questionHint = document.getElementById('questionHint');
+    if (questionText) questionText.textContent = '正在出题，稍等一下...';
+    if (questionHint) questionHint.textContent = '';
+
     try {
       const raw = await API.callDeepSeek(
-        `你是一个五年级数学出题助手。请出4道适合五年级的数学题，难度适中，涵盖：应用题（含方程）、分数运算、几何计算、混合运算。
-要求：每道题目清晰，有实际生活场景，不要太难也不要太简单（80-90分水平）。
-输出格式为JSON数组，每项有：text（题目文字）、type（题目类型）、answer（参考答案，字符串）。
-只输出JSON数组，不要任何其他文字或markdown。`,
-        '请出4道五年级数学练习题',
+        '你是一个五年级数学出题助手。请生成4道适合五年级的数学题，难度适中，包含应用题（含方程）、分数运算、几何计算、混合运算。每道题要有清晰题目，输出 JSON 数组，每项包含 text、type、answer。只输出 JSON。',
+        '请出4道五年级数学练习题。',
         1000
       );
-      const clean = raw.replace(/```json|```/g,'').trim();
-      state.questions = JSON.parse(clean);
-    } catch(e) {
-      console.warn('AI generate failed, using fallback:', e);
+      const clean = String(raw).replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      state.questions = Array.isArray(parsed) ? parsed.map(normalizeQuestion) : [];
+      if (!state.questions.length) throw new Error('no questions');
+    } catch (error) {
+      console.warn('AI generate failed, using fallback:', error);
       state.questions = [
-        { text: '小明有一些糖果，他把糖果的3/5分给了同学，还剩24颗。小明原来有多少颗糖果？', type: '方程应用题', answer: '60颗' },
-        { text: '一个长方形的周长是48厘米，长是宽的3倍，求这个长方形的面积。', type: '几何计算', answer: '108平方厘米' },
-        { text: '学校图书馆有360本书，科技类占1/4，文学类占5/12，其余是其他类。其他类有多少本？', type: '分数应用题', answer: '120本' },
-        { text: '甲乙两人同时从A地出发去B地，甲每小时走4千米，乙每小时走6千米，乙到达B地后立即返回，在距B地3千米处遇到甲。A、B两地相距多少千米？', type: '行程问题', answer: '9千米' }
+        normalizeQuestion({ text: '小明有 60 颗糖果，送给同学 3/5 后，还剩多少颗？', type: '分数应用题', answer: '24颗' }),
+        normalizeQuestion({ text: '一个长方形周长是 48 厘米，长是宽的 2 倍，求面积。', type: '几何计算', answer: '108平方厘米' }),
+        normalizeQuestion({ text: '学校图书馆有 360 本书，科技类占 1/4，文学类占 1/12，其余是其他类，其他类有多少本？', type: '分数应用题', answer: '120本' }),
+        normalizeQuestion({ text: '甲乙两人同时从 A 地出发去 B 地，甲每小时 8 千米，乙每小时 6 千米，乙到达后立即返回，在距 B 地 9 千米处遇到甲。A、B 两地相距多少千米？', type: '行程问题', answer: '9千米' })
       ];
     }
+
     updateProgress();
     loadQuestion(0);
   }
 
-  // ── Load a question ──
   function loadQuestion(idx) {
-    const q = state.questions[idx];
-    if (!q) return;
+    const q = normalizeQuestion(state.questions[idx] || {});
+    if (!q.text) return;
+
+    state.currentQ = idx;
     document.getElementById('qType').textContent = q.type;
     document.getElementById('questionText').textContent = q.text;
-    document.getElementById('questionHint').textContent = '提示：先圈出"求什么"，再划出关键数字';
-    document.getElementById('sessionNum').textContent = idx + 1;
+    document.getElementById('questionHint').textContent = '提示：先圈出“求什么”，再划出关键数字';
+    document.getElementById('sessionNum').textContent = String(idx + 1);
+    renderQuestionAssets(q.assets || []);
 
     state.thoughtSent = false;
     state.selectedError = null;
@@ -141,35 +234,33 @@ const App = (() => {
 
     document.getElementById('answerSection').style.display = 'none';
     document.getElementById('errorSection').style.display = 'none';
-    const answerInput = document.getElementById('answerInput');
-    answerInput.value = '';
-    answerInput.className = 'answer-input';
+    document.getElementById('answerInput').value = '';
+    document.getElementById('answerInput').className = 'answer-input';
     document.getElementById('nextBtn').disabled = true;
-    document.querySelectorAll('.error-tag').forEach(t => t.classList.remove('selected'));
+    document.querySelectorAll('.error-tag').forEach(tag => tag.classList.remove('selected'));
 
     setStep(1);
     updateProgress();
-
-    addMessage('ai', `这道${q.type}，你先看一看题目，然后告诉我：<br>① 这题<span class="highlight">求什么</span>？<br>② 题目里给了哪些<span class="highlight">关键数字或条件</span>？<br><br>不用担心对不对，想到什么说什么就行。`);
+    addMessage('ai', `这道${escapeHtml(q.type)}，你先看一眼题目，然后告诉我：<br>① 这题<span class="highlight">求什么</span>？<br>② 题目里给了哪些<span class="highlight">关键数字或条件</span>？<br><br>不用担心对不对，想到什么说什么就行。`);
   }
 
   function updateProgress() {
     const total = state.questions.length;
-    const done = state.currentQ;
-    const pct = total ? (done / total * 100) : 0;
-    document.getElementById('progressFill').style.width = pct + '%';
+    const done = Math.min(state.currentQ, total);
+    const pct = total ? (done / total) * 100 : 0;
+    document.getElementById('progressFill').style.width = `${pct}%`;
     document.getElementById('qCounter').textContent = `${done} / ${total}`;
   }
 
-  function setStep(n) {
-    state.practiceStep = n;
-    for(let i=1;i<=4;i++){
-      const el = document.getElementById('step'+i);
-      el.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  function setStep(step) {
+    state.practiceStep = step;
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById(`step${i}`);
+      if (!el) continue;
+      el.className = `step${i < step ? ' done' : i === step ? ' active' : ''}`;
     }
   }
 
-  // ── Messages ──
   function addMessage(role, html) {
     state.messages.push({ role, html });
     renderMessages();
@@ -177,148 +268,140 @@ const App = (() => {
 
   function renderMessages() {
     const container = document.getElementById('messages');
-    container.innerHTML = state.messages.map(m => `
-      <div class="msg ${m.role === 'user' ? 'user' : ''}">
-        <div class="msg-avatar">${m.role === 'user' ? '' : ''}</div>
-        <div class="msg-bubble">${m.html}</div>
+    if (!container) return;
+    container.innerHTML = state.messages.map(message => `
+      <div class="msg ${message.role === 'user' ? 'user' : ''}">
+        <div class="msg-avatar"></div>
+        <div class="msg-bubble">${message.html}</div>
       </div>
     `).join('');
     container.scrollTop = container.scrollHeight;
   }
 
   function showLoading() {
-    state.messages.push({ role: 'ai', html: '<div class="loading"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>' });
+    state.messages.push({
+      role: 'ai',
+      html: '<div class="loading"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>'
+    });
     renderMessages();
   }
 
   function removeLoading() {
-    if (state.messages.length && state.messages[state.messages.length-1].html.includes('loading')) {
-      state.messages.pop();
-    }
+    const last = state.messages[state.messages.length - 1];
+    if (last?.html?.includes('loading')) state.messages.pop();
+    renderMessages();
   }
 
-  // ── Send thought ──
   async function sendThought() {
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
     if (!text) return;
-    input.value = '';
 
-    addMessage('user', text);
+    input.value = '';
+    addMessage('user', escapeHtml(text).replace(/\n/g, '<br>'));
     setStep(2);
     showLoading();
 
-    const q = state.questions[state.currentQ];
+    const q = normalizeQuestion(state.questions[state.currentQ]);
     try {
       const reply = await API.callDeepSeek(
-        `你是一个温和耐心的数学学习搭档，专门帮助五年级小朋友建立解题思路。
-你的角色不是直接告诉答案，而是：
-1. 先肯定孩子说的思路中正确的部分（一定要先肯定）
-2. 如果思路有偏差，温和地引导，不批评
-3. 帮孩子梳理解题步骤，特别强调"先看求什么，再找条件"
-4. 如果涉及方程，先承认算术法也对，然后引导"我们把你的想法翻译成方程格式"
-5. 回复要简洁，用口语，不要说教
-6. 最后告诉孩子：思路梳理好了，现在可以动笔写答案了
-用HTML格式回复，可以用<span class="highlight">文字</span>高亮关键词，可以用<ul><li>列表。`,
+        '你是一位温和、耐心的数学学习搭档，帮助五年级孩子梳理思路。先肯定孩子思路中正确的地方，如果有偏差，用很温和的方式引导，不要直接给答案。最后提醒孩子先看“求什么”，再找条件。',
         `题目：${q.text}\n\n孩子的思路：${text}\n\n请帮他梳理思路。`,
         1000
       );
       removeLoading();
-      addMessage('ai', reply);
-      setStep(3);
-      state.thoughtSent = true;
-      document.getElementById('answerSection').style.display = 'block';
-    } catch(e) {
+      addMessage('ai', reply || '思路很好，我们继续往下走。');
+    } catch (error) {
       removeLoading();
-      addMessage('ai', '网络好像有点问题，但没关系！你的思路说完了吗？准备好就可以写答案了。');
-      state.thoughtSent = true;
-      document.getElementById('answerSection').style.display = 'block';
-      setStep(3);
+      addMessage('ai', '我刚刚没连上网络，不过没关系，我们继续做下一步。');
     }
+
+    state.thoughtSent = true;
+    setStep(3);
+    document.getElementById('answerSection').style.display = 'block';
   }
 
-  // ── Submit answer ──
   async function submitAnswer() {
-    const ans = document.getElementById('answerInput').value.trim();
-    if (!ans) { alert('先写下你的答案'); return; }
+    const input = document.getElementById('answerInput');
+    const ans = input.value.trim();
+    if (!ans) {
+      alert('先写下你的答案');
+      return;
+    }
 
-    const q = state.questions[state.currentQ];
-    const answerInput = document.getElementById('answerInput');
+    const q = normalizeQuestion(state.questions[state.currentQ]);
     showLoading();
     setStep(4);
 
+    const expected = normalizeText(q.answer);
+    const actual = normalizeText(ans);
+    let isCorrect = false;
+    if (expected && actual) {
+      isCorrect = expected === actual || expected.includes(actual) || actual.includes(expected);
+    }
+
     try {
       const reply = await API.callDeepSeek(
-        `你是数学答案评判助手。判断孩子的答案是否正确。
-如果正确：热情鼓励，说一句"这道题你掌握了！" 回复里必须包含"正确"两个字。
-如果错误：回复里包含"不对"两个字，温和指出哪里不对，不要直接给答案，给一个提示让孩子再想想。
-回复简短，口语化，用HTML。可以用<span class="highlight">高亮关键信息。`,
-        `题目：${q.text}\n参考答案：${q.answer}\n孩子的答案：${ans}\n\n请判断对错并给反馈。`,
-        800
+        '你是数学答题反馈助手。请根据参考答案和学生答案，给出简短、温和的反馈。如果正确，必须包含“正确”两个字；如果不对，必须包含“不对”两个字，并指出一个最关键的改进点，不要长篇大论。',
+        `题目：${q.text}\n参考答案：${q.answer || '无'}\n学生答案：${ans}\n\n请给出反馈。`,
+        700
       );
       removeLoading();
-
-      const isCorrect = reply.includes('正确') && !reply.includes('不对');
-      answerInput.className = 'answer-input ' + (isCorrect ? 'correct' : 'wrong');
-      addMessage('ai', reply);
-
-      if (isCorrect) { state.sessionStats.correct++; state.sessionStats.saved++; }
-      state.sessionStats.done++;
-      updateSidebarStats();
-
-      // Save to Supabase
-      try {
-        await DB.savePractice({
-          question: q.text,
-          qType: q.type,
-          userAnswer: ans,
-          isCorrect,
-          errorTag: null,
-          messages: state.messages
-        });
-        await DB.updateStats({
-          done: state.sessionStats.done,
-          correct: state.sessionStats.correct,
-          streak: state.streak
-        });
-      } catch (dbErr) { console.warn('save practice failed:', dbErr); }
-
-      document.getElementById('answerSection').style.display = 'none';
-      document.getElementById('errorSection').style.display = 'block';
-
-    } catch(e) {
+      addMessage('ai', reply || (isCorrect ? '正确，我们继续！' : '不对，再看一眼题目条件。'));
+    } catch {
       removeLoading();
-      addMessage('ai', '没能连上网络，但不要紧！下一题继续。');
-      document.getElementById('answerSection').style.display = 'none';
-      document.getElementById('errorSection').style.display = 'block';
-      state.sessionStats.done++;
-      updateSidebarStats();
+      addMessage('ai', isCorrect ? '正确，我们继续！' : '不对，再看一眼题目条件。');
     }
+
+    input.className = `answer-input ${isCorrect ? 'correct' : 'wrong'}`;
+    state.sessionStats.done += 1;
+    if (isCorrect) {
+      state.sessionStats.correct += 1;
+      state.sessionStats.saved += 1;
+    }
+    updateSidebarStats();
+
+    try {
+      await DB.savePractice({
+        question: q.text,
+        qType: q.type,
+        userAnswer: ans,
+        isCorrect,
+        errorTag: null,
+        messages: state.messages
+      });
+      await DB.updateStats({
+        done: state.sessionStats.done,
+        correct: state.sessionStats.correct,
+        streak: state.streak
+      });
+    } catch (error) {
+      console.warn('save practice failed:', error);
+    }
+
+    document.getElementById('answerSection').style.display = 'none';
+    document.getElementById('errorSection').style.display = 'block';
   }
 
-  // ── Error tagging ──
   function tagError(el, code) {
-    document.querySelectorAll('.error-tag').forEach(t => t.classList.remove('selected'));
+    document.querySelectorAll('.error-tag').forEach(tag => tag.classList.remove('selected'));
     el.classList.add('selected');
     state.selectedError = code;
     document.getElementById('nextBtn').disabled = false;
 
-    const q = state.questions[state.currentQ];
+    const q = normalizeQuestion(state.questions[state.currentQ]);
     state.errorLog.push({
-      q: q.text.substring(0, 40) + (q.text.length > 40 ? '…' : ''),
+      q: q.text.slice(0, 40),
       type: code,
       time: new Date().toLocaleDateString()
     });
 
-    // Save error log to Supabase
-    DB.saveErrorLog(q.text, code).catch(e => console.warn('save error failed:', e));
-
+    DB.saveErrorLog(q.text, code).catch(error => console.warn('save error failed:', error));
     updateErrorSummary();
   }
 
-  // ── Next question ──
   function nextQuestion() {
-    state.currentQ++;
+    state.currentQ += 1;
     if (state.currentQ >= state.questions.length) {
       showResult();
       return;
@@ -326,86 +409,95 @@ const App = (() => {
     loadQuestion(state.currentQ);
   }
 
-  // ── Show result ──
   function showResult() {
     showView('result');
     const { done, correct, saved } = state.sessionStats;
-    const pct = done ? Math.round(correct/done*100) : 0;
+    const pct = done ? Math.round((correct / done) * 100) : 0;
 
-    let emoji = '', title = '今天做完了！', sub = '';
-    if (pct >= 80) { emoji=''; title='太棒了！'; sub='大部分题你都做对了，继续保持！'; }
-    else if (pct >= 60) { emoji=''; title='做得不错！'; sub='还有几道题有小失误，看看错因记录。'; }
-    else { emoji=''; title='今天有点难，没关系！'; sub='重要的是你说出了思路，这就是进步。'; }
-
-    if (done > 0) {
-      state.streak++;
-      DB.updateStats({ streak: state.streak }).catch(() => {});
-      document.getElementById('statStreak').textContent = state.streak;
+    let title = '今天做完了！';
+    let sub = '很棒，先给自己一个大拇指。';
+    if (pct >= 80) {
+      title = '太棒了！';
+      sub = '大部分题你都掌握了，继续保持。';
+    } else if (pct >= 60) {
+      title = '做得不错！';
+      sub = '还有几道题可以再捡回来。';
+    } else {
+      title = '今天有点难，但没关系！';
+      sub = '重要的是你已经开始整理思路了。';
     }
 
-    document.getElementById('resultEmoji').textContent = emoji;
+    if (done > 0) {
+      state.streak += 1;
+      DB.updateStats({ streak: state.streak }).catch(() => {});
+      document.getElementById('statStreak').textContent = String(state.streak);
+    }
+
+    document.getElementById('resultEmoji').textContent = '🎉';
     document.getElementById('resultTitle').textContent = title;
     document.getElementById('resultSub').textContent = sub;
-    document.getElementById('rDone').textContent = done;
-    document.getElementById('rCorrect').textContent = correct;
-    document.getElementById('rSaved').textContent = saved;
-
-    const breakdown = buildErrorBreakdown();
-    document.getElementById('errorBreakdown').innerHTML = breakdown;
+    document.getElementById('rDone').textContent = String(done);
+    document.getElementById('rCorrect').textContent = String(correct);
+    document.getElementById('rSaved').textContent = String(saved);
+    document.getElementById('errorBreakdown').innerHTML = buildErrorBreakdown();
   }
 
   function buildErrorBreakdown() {
-    const map = { A:' 看漏条件', B:' 计算错', C:' 抄错数字', D:' 方法不对', E:' 单位/格式', F:' 做对了' };
+    const map = {
+      A: '看漏条件',
+      B: '计算错了',
+      C: '抄错数字',
+      D: '方法不对',
+      E: '单位/格式',
+      F: '其实做对了'
+    };
     const counts = {};
-    state.errorLog.forEach(e => { counts[e.type] = (counts[e.type]||0)+1; });
-    if (!Object.keys(counts).length) return '<div style="color:var(--text-muted)">暂无错题记录</div>';
-    const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
-    let html = '<strong style="font-size:13px;">今日错误类型</strong><br>';
-    sorted.forEach(([k,v]) => {
-      html += `<span style="display:inline-block;margin-right:12px;">${map[k] || k}: <strong>${v}</strong> 次</span>`;
+    state.errorLog.forEach(item => {
+      counts[item.type] = (counts[item.type] || 0) + 1;
     });
-    const top = sorted[0];
-    if (top && top[0] !== 'F') {
-      const tips = { A:'下次先圈出题目里的每个条件再动笔', B:'做完后挑一道重算一遍', C:'抄数字前再看一眼原题', D:'遇到不熟的类型先说思路', E:'写答案时检查一下单位' };
-      html += `<br><span style="color:var(--primary);font-size:13px;"> 重点改进：${tips[top[0]] || ''}</span>`;
-    }
-    return html;
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) return '<div style="color:var(--text-muted)">暂无错题记录</div>';
+    return entries.map(([key, value]) => `<span style="display:inline-block;margin-right:12px;">${map[key] || key}: <strong>${value}</strong> 次</span>`).join('');
   }
 
   function updateSidebarStats() {
-    document.getElementById('statDone').textContent = state.sessionStats.done;
-    document.getElementById('statCorrect').textContent = state.sessionStats.correct;
-    document.getElementById('statSaved').textContent = state.sessionStats.saved;
+    document.getElementById('statDone').textContent = String(state.sessionStats.done);
+    document.getElementById('statCorrect').textContent = String(state.sessionStats.correct);
+    document.getElementById('statSaved').textContent = String(state.sessionStats.saved);
   }
 
-  function updateErrorSummaryFromData(errorStats) {
-    const map = { A:'看漏条件', B:'计算错', C:'抄错数字', D:'方法不对', E:'单位/格式', F:'做对了' };
-    const entries = Object.entries(errorStats);
-    if (!entries.length) { document.getElementById('errorSummary').textContent = '暂无记录'; return; }
-    const sorted = entries.sort((a,b)=>b[1]-a[1]).slice(0, 3);
-    document.getElementById('errorSummary').innerHTML = sorted.map(([k,v]) =>
-      `<span style="display:block;">${map[k]||k}：<strong style="color:var(--primary);">${v}次</strong></span>`
-    ).join('');
+  function updateErrorSummaryFromData(errorStats = {}) {
+    const map = {
+      A: '看漏条件',
+      B: '计算错了',
+      C: '抄错数字',
+      D: '方法不对',
+      E: '单位/格式',
+      F: '其实做对了'
+    };
+    const entries = Object.entries(errorStats).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const el = document.getElementById('errorSummary');
+    if (!el) return;
+    if (!entries.length) {
+      el.textContent = '暂无记录';
+      return;
+    }
+    el.innerHTML = entries.map(([key, value]) => `<span style="display:block;">${map[key] || key}: <strong style="color:var(--primary);">${value}次</strong></span>`).join('');
   }
 
   async function updateErrorSummary() {
     try {
       const stats = await DB.getErrorStats();
       updateErrorSummaryFromData(stats);
-    } catch (e) {
-      // fallback to session data
-      const map = { A:'看漏条件', B:'计算错', C:'抄错数字', D:'方法不对', E:'单位/格式', F:'做对了' };
+    } catch {
       const counts = {};
-      state.errorLog.forEach(e => { counts[e.type] = (counts[e.type]||0)+1; });
-      if (!Object.keys(counts).length) { document.getElementById('errorSummary').textContent = '暂无记录'; return; }
-      const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,3);
-      document.getElementById('errorSummary').innerHTML = sorted.map(([k,v]) =>
-        `<span style="display:block;">${map[k]||k}：<strong style="color:var(--primary);">${v}次</strong></span>`
-      ).join('');
+      state.errorLog.forEach(item => {
+        counts[item.type] = (counts[item.type] || 0) + 1;
+      });
+      updateErrorSummaryFromData(counts);
     }
   }
 
-  // ── History ──
   async function renderHistory() {
     const container = document.getElementById('historyList');
     try {
@@ -414,40 +506,62 @@ const App = (() => {
         container.innerHTML = '<div style="color:var(--text-muted);font-size:15px;padding:24px 0;">还没有记录，完成练习后会显示在这里。</div>';
         return;
       }
-      const map = { A:'看漏条件', B:'计算错', C:'抄错数字', D:'方法不对', E:'单位/格式', F:'做对了' };
-      container.innerHTML = logs.map(e => `
+      const map = { A: '看漏条件', B: '计算错了', C: '抄错数字', D: '方法不对', E: '单位/格式', F: '其实做对了' };
+      container.innerHTML = logs.map(item => `
         <div class="history-item">
-          <div class="history-q">${e.question}</div>
+          <div class="history-q">${escapeHtml(item.question || '')}</div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <span class="badge ${e.error_tag==='F'?'badge-success':'badge-warning'}">${map[e.error_tag]||e.error_tag}</span>
-            <span class="history-meta">${new Date(e.created_at).toLocaleDateString()}</span>
+            <span class="badge ${item.error_tag === 'F' ? 'badge-success' : 'badge-warning'}">${map[item.error_tag] || item.error_tag}</span>
+            <span class="history-meta">${new Date(item.created_at).toLocaleDateString()}</span>
           </div>
         </div>
       `).join('');
-    } catch (e) {
+    } catch {
       container.innerHTML = '<div style="color:var(--text-muted);font-size:15px;padding:24px 0;">加载失败，请检查网络。</div>';
     }
   }
 
-  // ── Question Bank ──
   async function renderQBank() {
     const container = document.getElementById('qbankList');
     try {
-      const banks = await DB.getQuestionBanks();
-      if (!banks.length) {
+      const [sources, banks] = await Promise.all([DB.getQuestionSources(), DB.getQuestionBanks()]);
+      const sourceHtml = (sources || []).map(source => {
+        const title = escapeHtml(source.title || source.source || '未命名题库');
+        const date = source.created_at ? new Date(source.created_at).toLocaleDateString() : '';
+        return `
+          <div class="qbank-item" onclick="App.startWithQuestionSource(${source.id}, ${JSON.stringify(source.title || source.source || '题库练习')})">
+            <div>
+              <div class="qbank-title">${title}</div>
+              <div class="qbank-count">${date}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="event.stopPropagation();App.startWithQuestionSource(${source.id}, ${JSON.stringify(source.title || source.source || '题库练习')})">开始</button>
+          </div>
+        `;
+      }).join('');
+
+      const legacyHtml = (banks || []).map(bank => {
+        const title = escapeHtml(bank.title || '未命名题库');
+        const count = Array.isArray(bank.questions) ? bank.questions.length : 0;
+        const date = bank.created_at ? new Date(bank.created_at).toLocaleDateString() : '';
+        const payload = JSON.stringify({ title: bank.title || '题库练习', questions: Array.isArray(bank.questions) ? bank.questions : [] }).replace(/"/g, '&quot;');
+        return `
+          <div class="qbank-item" onclick="App.startWithQBank(${payload})">
+            <div>
+              <div class="qbank-title">${title}</div>
+              <div class="qbank-count">${count} 道题 · ${date}</div>
+            </div>
+            <button class="btn btn-ghost" onclick="event.stopPropagation();App.deleteQBank(${bank.id})">删除</button>
+          </div>
+        `;
+      }).join('');
+
+      if (!sourceHtml && !legacyHtml) {
         container.innerHTML = '<div style="color:var(--text-muted);font-size:15px;padding:24px 0;">还没有上传题库，请家长上传题目。</div>';
         return;
       }
-      container.innerHTML = banks.map(b => `
-        <div class="qbank-item" onclick="App.startWithQBank(${JSON.stringify(b.questions).replace(/"/g, '&quot;')})">
-          <div>
-            <div class="qbank-title">${b.title}</div>
-            <div class="qbank-count">${b.questions.length} 道题 · ${new Date(b.created_at).toLocaleDateString()}</div>
-          </div>
-          <button class="btn btn-ghost" onclick="event.stopPropagation();App.deleteQBank(${b.id})">删除</button>
-        </div>
-      `).join('');
-    } catch (e) {
+      container.innerHTML = sourceHtml + legacyHtml;
+    } catch (error) {
+      console.warn('renderQBank failed:', error);
       container.innerHTML = '<div style="color:var(--text-muted);font-size:15px;padding:24px 0;">加载失败，请检查网络。</div>';
     }
   }
@@ -456,23 +570,26 @@ const App = (() => {
     const title = prompt('给这套题起个名字：');
     if (!title) return;
     const text = document.getElementById('qbankText').value.trim();
-    if (!text) { alert('请先输入题目'); return; }
-    // Split by newlines, each line is a question
-    const lines = text.split('\n').filter(l => l.trim());
-    const questions = lines.map((line, i) => ({
-      text: line.trim(),
-      type: '自定义题目',
-      answer: null
-    }));
-    if (!questions.length) { alert('请至少输入一道题'); return; }
+    if (!text) {
+      alert('请先输入题目');
+      return;
+    }
+
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const questions = lines.map(line => normalizeQuestion({ text: line, type: '自定义题目', answer: '', explanation: '', assets: [] }));
+
+    if (!questions.length) {
+      alert('请至少输入一道题');
+      return;
+    }
 
     try {
       await DB.saveQuestionBank(title, questions);
       document.getElementById('qbankText').value = '';
       renderQBank();
       alert('题库已保存！');
-    } catch (e) {
-      alert('保存失败: ' + e.message);
+    } catch (error) {
+      alert('保存失败：' + error.message);
     }
   }
 
@@ -481,62 +598,85 @@ const App = (() => {
     try {
       await DB.deleteQuestionBank(id);
       renderQBank();
-    } catch (e) {
-      alert('删除失败: ' + e.message);
+    } catch (error) {
+      alert('删除失败：' + error.message);
     }
   }
 
-  // ── Keyboard ──
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendThought(); }
+  function handleKey(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendThought();
+    }
   }
 
-  // ── Voice input ──
   function toggleVoice() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('您的浏览器不支持语音输入，请使用Chrome或Safari浏览器。');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert('当前浏览器不支持语音输入，请使用 Chrome 或 Safari。');
       return;
     }
+
     const btn = document.getElementById('voiceBtn');
     if (state.isRecording) {
       state.recognition?.stop();
       state.isRecording = false;
       btn.classList.remove('recording');
-      btn.textContent = '';
       return;
     }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
     state.recognition = new SR();
     state.recognition.lang = 'zh-CN';
     state.recognition.continuous = false;
     state.recognition.interimResults = true;
-    state.recognition.onstart = () => { state.isRecording = true; btn.classList.add('recording'); btn.textContent = ''; };
-    state.recognition.onresult = (e) => {
-      const transcript = Array.from(e.results).map(r=>r[0].transcript).join('');
+    state.recognition.onstart = () => {
+      state.isRecording = true;
+      btn.classList.add('recording');
+    };
+    state.recognition.onresult = event => {
+      const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
       document.getElementById('chatInput').value = transcript;
     };
-    state.recognition.onend = () => { state.isRecording = false; btn.classList.remove('recording'); btn.textContent = ''; };
-    state.recognition.onerror = () => { state.isRecording = false; btn.classList.remove('recording'); btn.textContent = ''; };
+    state.recognition.onend = () => {
+      state.isRecording = false;
+      btn.classList.remove('recording');
+    };
+    state.recognition.onerror = () => {
+      state.isRecording = false;
+      btn.classList.remove('recording');
+    };
     state.recognition.start();
   }
 
-  // ── File upload ──
-  function handleFile(e) {
-    const file = e.target.files[0];
+  function handleFile(event) {
+    const file = event.target.files[0];
     if (!file) return;
-    document.getElementById('pasteInput').value =
-      '请把图片里的题目文字手动输入到这里再开始练习。';
+    document.getElementById('pasteInput').value = '你可以把图片里的题目文字手动输入到这里，然后开始练习。';
   }
 
-  // ── Logout ──
   function logout() {
     Auth.logout();
   }
 
   return {
-    init, showView, startDaily, startWithCustom, startWithQBank,
-    sendThought, submitAnswer, tagError, nextQuestion,
-    handleKey, toggleVoice, handleFile, logout,
-    saveQBank, deleteQBank
+    init,
+    showView,
+    startDaily,
+    startWithCustom,
+    startWithQBank,
+    startWithQuestionSource,
+    sendThought,
+    submitAnswer,
+    tagError,
+    nextQuestion,
+    handleKey,
+    toggleVoice,
+    handleFile,
+    logout,
+    saveQBank,
+    deleteQBank
   };
 })();
+
+
+
