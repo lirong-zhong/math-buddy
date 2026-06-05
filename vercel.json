@@ -8,9 +8,17 @@
     }
   },
   "routes": [
-    { "src": "/api/chat", "dest": "/api/chat" },
-    { "src": "/assets/(.*)", "dest": "/assets/$1" },
-    { "src": "/(.*\\.(html|css|js|json|png|ico|svg|txt))", "dest": "/$1" },
-    { "src": "/.*", "dest": "/index.html" }
+    {
+      "src": "/api/chat",
+      "dest": "/api/chat"
+    },
+    {
+      "src": "/(.*\\.(html|css|js|json|png|ico|svg|txt))",
+      "dest": "/$1"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
   ]
 }
