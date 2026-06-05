@@ -279,7 +279,7 @@ async function doLogin() {
     await Auth.login(pw);
     await showApp();
   } catch (e) {
-    errEl.textContent = '密码不正确，再试一次';
+    errEl.textContent = e.message || '密码不正确，再试一次';
   }
 }
 
