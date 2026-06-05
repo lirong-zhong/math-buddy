@@ -3,13 +3,9 @@
   "version": "1.0.0",
   "description": "数学搭档 - 小朋友数学练习应用，Supabase + Vercel 部署",
   "scripts": {
-    "dev": "vercel dev",
-    "build": "vercel build"
+    "build": "node build.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
-  },
-  "devDependencies": {
-    "vercel": "^37.0.0"
   }
 }

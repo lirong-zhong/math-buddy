@@ -1,6 +1,5 @@
 {
   "rewrites": [
     { "source": "/api/chat", "destination": "/api/chat" }
-  ],
-  "buildCommand": "node build.js"
+  ]
 }
