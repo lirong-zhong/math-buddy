@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="数学搭档">
+<title>数学搭档</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="stylesheet" href="/style.css">
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- App config (deploy: replace with your Supabase values) -->
+<script src="/config.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN SCREEN ═══════════════════ -->
+<div id="loginScreen" class="login-wrap hidden">
+  <div class="login-card">
+    <div class="logo"><span class="star">⭐</span> 数学搭档</div>
+    <div class="sub">输入密码开始练习</div>
+    <input type="password" id="loginPassword" class="login-input" placeholder="输入密码" autocomplete="off">
+    <div class="login-error" id="loginError"></div>
+    <button class="btn btn-primary btn-lg" onclick="doLogin()" style="width:100%;justify-content:center;">
+      进入
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════ MAIN APP ═══════════════════ -->
+<div id="mainApp" class="hidden">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <span class="star">⭐</span> 数学搭档
+    </div>
+    <div class="topbar-actions">
+      <span id="sessionBadge" class="badge badge-primary hidden">今日第 <span id="sessionNum">1</span> 题</span>
+      <button class="btn btn-ghost" onclick="App.showView('upload')">📤 上传题目</button>
+      <button class="btn btn-ghost" onclick="App.showView('qbank')">📚 题库</button>
+      <button class="btn btn-primary" onclick="App.startDaily()">🎯 今日练习</button>
+      <button class="btn btn-ghost" onclick="App.logout()">🚪 退出</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">导航</div>
+        <button class="mode-btn active" id="nav-home" onclick="App.showView('home')">
+          <span class="icon">🏠</span> 主页
+        </button>
+        <button class="mode-btn" id="nav-practice" onclick="App.showView('practice')">
+          <span class="icon">✏️</span> 练习
+        </button>
+        <button class="mode-btn" id="nav-history" onclick="App.showView('history')">
+          <span class="icon">📋</span> 错题记录
+        </button>
+        <button class="mode-btn" id="nav-qbank" onclick="App.showView('qbank')">
+          <span class="icon">📚</span> 我的题库
+        </button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">今日状态</div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num" id="statDone">0</div>
+            <div class="stat-lbl">完成题目</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statCorrect">0</div>
+            <div class="stat-lbl">答对</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statSaved">0</div>
+            <div class="stat-lbl">捡回的分</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="statStreak">0</div>
+            <div class="stat-lbl">连对天数</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">常见错误类型</div>
+        <div id="errorSummary" style="font-size:13px; color:var(--text-muted); line-height:2;">
+          暂无记录
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+
+      <!-- HOME -->
+      <div id="view-home">
+        <div class="welcome-card">
+          <h2 id="greetText">你好！准备好了吗？</h2>
+          <p>每天 10–15 分钟，先把思路说出来，再动笔。<br>你不需要一下子做很多，一道题做好就是进步。</p>
+        </div>
+        <div class="cards-row">
+          <div class="action-card" onclick="App.startDaily()">
+            <div class="icon">🎯</div>
+            <h3>今日练习</h3>
+            <p>AI 帮你出 4–5 道题，先说思路再答题</p>
+          </div>
+          <div class="action-card" onclick="App.showView('upload')">
+            <div class="icon">📤</div>
+            <h3>用老师的题</h3>
+            <p>家长上传作业或试卷题目来练习</p>
+          </div>
+          <div class="action-card" onclick="App.showView('history')">
+            <div class="icon">🔍</div>
+            <h3>看错题记录</h3>
+            <p>了解哪类错误最多，有针对性地改</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">💡 今天的小提醒</div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px;font-size:15px;line-height:1.8;color:var(--text);">
+            <strong>做题前先做两件事：</strong><br>
+            ① 圈出"求什么"<br>
+            ② 划出关键条件中的数字
+          </div>
+        </div>
+      </div>
+
+      <!-- PRACTICE -->
+      <div id="view-practice" class="hidden">
+        <div class="practice-header">
+          <div class="practice-title" id="practiceTitle">今日练习</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+          </div>
+          <div class="q-counter" id="qCounter">0 / 0</div>
+        </div>
+
+        <div class="steps">
+          <div class="step active" id="step1"><span class="step-num">1</span>读题 &amp; 说思路</div>
+          <div class="step" id="step2"><span class="step-num">2</span>AI 梳理</div>
+          <div class="step" id="step3"><span class="step-num">3</span>写答案</div>
+          <div class="step" id="step4"><span class="step-num">4</span>标错因</div>
+        </div>
+
+        <!-- Question -->
+        <div class="question-card" id="questionCard">
+          <div class="question-tag">📐 五年级 · <span id="qType">应用题</span></div>
+          <div class="question-text" id="questionText">加载中...</div>
+          <div class="question-hint" id="questionHint"></div>
+        </div>
+
+        <!-- Chat -->
+        <div class="think-area" id="thinkArea">
+          <div class="think-area-header">
+            <span>💬 先把你的想法说出来 — 对了错了都没关系</span>
+            <div style="display:flex;gap:8px;">
+              <button class="voice-btn" id="voiceBtn" onclick="App.toggleVoice()" title="语音输入">🎤</button>
+            </div>
+          </div>
+          <div class="messages" id="messages"></div>
+          <div class="input-row">
+            <textarea class="chat-input" id="chatInput" rows="1" placeholder="说说你的思路……比如：我看到题目说……所以我想……" onkeydown="App.handleKey(event)"></textarea>
+            <button class="btn btn-primary" onclick="App.sendThought()">发送</button>
+          </div>
+        </div>
+
+        <!-- Answer input -->
+        <div class="answer-section" id="answerSection" style="display:none;">
+          <div class="answer-label">✍️ 写下你的答案</div>
+          <input class="answer-input" id="answerInput" type="text" placeholder="把最终答案写在这里……" autocomplete="off">
+          <div style="margin-top:12px;">
+            <button class="btn btn-success btn-lg" onclick="App.submitAnswer()">✅ 提交答案</button>
+          </div>
+        </div>
+
+        <!-- Error tagging -->
+        <div id="errorSection" style="display:none;">
+          <div class="answer-label" style="margin-bottom:10px;">❓ 这题错在哪里？选一个最准确的</div>
+          <div class="error-tags">
+            <div class="error-tag" onclick="App.tagError(this,'A')">👀 A · 看漏条件</div>
+            <div class="error-tag" onclick="App.tagError(this,'B')">🔢 B · 计算错了</div>
+            <div class="error-tag" onclick="App.tagError(this,'C')">📝 C · 抄错数字</div>
+            <div class="error-tag" onclick="App.tagError(this,'D')">🤔 D · 方法不对</div>
+            <div class="error-tag" onclick="App.tagError(this,'E')">📏 E · 单位/格式</div>
+            <div class="error-tag" onclick="App.tagError(this,'F')">✓ F · 其实做对了</div>
+          </div>
+          <div style="margin-top:16px;">
+            <button class="btn btn-primary btn-lg" id="nextBtn" onclick="App.nextQuestion()" disabled>下一题 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPLOAD -->
+      <div id="view-upload" class="hidden">
+        <div style="max-width:560px;">
+          <div style="font-size:20px;font-weight:700;margin-bottom:20px;">📤 上传题目</div>
+          <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+            <div class="icon">📷</div>
+            <p>点击上传图片（拍题目照片）<br>或粘贴文字题目</p>
+            <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="App.handleFile(event)">
+          </div>
+          <div style="margin-bottom:16px;">
+            <div class="answer-label">或者直接粘贴/输入题目文字</div>
+            <textarea id="pasteInput" style="width:100%;padding:14px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-family:'Noto Sans SC',sans-serif;min-height:120px;resize:vertical;background:var(--surface);color:var(--text);outline:none;" placeholder="把题目文字粘贴到这里……"></textarea>
+          </div>
+          <button class="btn btn-primary btn-lg" onclick="App.startWithCustom(document.getElementById('pasteInput').value.trim())">▶️ 用这道题开始练习</button>
+        </div>
+      </div>
+
+      <!-- QUESTION BANK -->
+      <div id="view-qbank" class="hidden">
+        <div style="max-width:560px;">
+          <div style="font-size:20px;font-weight:700;margin-bottom:16px;">📚 我的题库</div>
+          <p style="font-size:14px;color:var(--text-muted);margin-bottom:20px;">这里是家长上传的练习题库。每行一道题。</p>
+
+          <div style="margin-bottom:16px;">
+            <textarea id="qbankText" style="width:100%;padding:14px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-family:'Noto Sans SC',sans-serif;min-height:160px;resize:vertical;background:var(--surface);color:var(--text);outline:none;" placeholder="在这里粘贴多道题目，每行一道……"></textarea>
+          </div>
+          <button class="btn btn-primary" onclick="App.saveQBank()" style="margin-bottom:24px;">💾 保存题库</button>
+
+          <div style="font-weight:700;margin-bottom:12px;">已保存的题库</div>
+          <div id="qbankList">
+            <div style="color:var(--text-muted);font-size:14px;">加载中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div id="view-history" class="hidden">
+        <div style="font-size:20px;font-weight:700;margin-bottom:20px;">📋 错题记录</div>
+        <div id="historyList">
+          <div style="color:var(--text-muted);font-size:15px;padding:24px 0;">加载中...</div>
+        </div>
+      </div>
+
+      <!-- RESULT -->
+      <div id="view-result" class="hidden">
+        <div class="result-summary">
+          <div class="result-emoji" id="resultEmoji">🎉</div>
+          <div class="result-title" id="resultTitle">今天做完了！</div>
+          <div class="result-sub" id="resultSub"></div>
+          <div class="result-grid">
+            <div class="stat-card"><div class="stat-num" id="rDone">0</div><div class="stat-lbl">完成题目</div></div>
+            <div class="stat-card"><div class="stat-num" id="rCorrect">0</div><div class="stat-lbl">做对</div></div>
+            <div class="stat-card"><div class="stat-num" id="rSaved">0</div><div class="stat-lbl">捡回的分</div></div>
+          </div>
+          <div id="errorBreakdown" style="text-align:left;background:var(--bg);border-radius:12px;padding:16px 20px;margin-bottom:24px;font-size:14px;line-height:2;"></div>
+          <button class="btn btn-primary btn-lg" onclick="App.startDaily()">再来一组</button>
+          <button class="btn btn-ghost btn-lg" onclick="App.showView('home')" style="margin-left:12px;">回主页</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/auth.js"></script>
+<script src="/api.js"></script>
+<script src="/db.js"></script>
+<script src="/app.js"></script>
+
+<script>
+// ============================================================
+// Bootstrap — 检查登录状态，初始化应用
+// ============================================================
+
+async function doLogin() {
+  const pw = document.getElementById('loginPassword').value.trim();
+  const errEl = document.getElementById('loginError');
+  if (!pw) { errEl.textContent = '请输入密码'; return; }
+
+  try {
+    await Auth.login(pw);
+    await showApp();
+  } catch (e) {
+    errEl.textContent = '密码不正确，再试一次';
+  }
+}
+
+function showLogin() {
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('mainApp').classList.add('hidden');
+  document.getElementById('loginPassword').focus();
+}
+
+async function showApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+
+  DB.init(Auth.getUserId());
+  await App.init();
+}
+
+// Handle Enter key on login
+document.getElementById('loginPassword').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLogin();
+});
+
+// Check session on load
+if (Auth.isLoggedIn()) {
+  showApp();
+} else {
+  showLogin();
+}
+</script>
+
+</body>
+</html>
