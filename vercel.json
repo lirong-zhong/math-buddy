@@ -1,7 +1,10 @@
 {
-  "framework": null,
-  "outputDirectory": ".",
+  "version": 2,
+  "buildCommand": "node build.js",
   "rewrites": [
     { "source": "/api/chat", "destination": "/api/chat" }
+  ],
+  "builds": [
+    { "src": "api/chat.js", "use": "@vercel/node" }
   ]
 }
