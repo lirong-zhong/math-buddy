@@ -1,7 +1,15 @@
 // ============================================================
-// config.js — 配置（部署时替换为你的实际值）
+// config.js — 部署时加载真实的 config.local.js（不提交到 git）
 // ============================================================
-window.__MB_CONFIG__ = {
-  SUPABASE_URL: 'https://your-project.supabase.co',
-  SUPABASE_ANON_KEY: 'your-anon-key'
-};
+(function() {
+  var s = document.createElement('script');
+  s.src = '/config.local.js';
+  s.onerror = function() {
+    console.warn('config.local.js not found, using placeholder');
+    window.__MB_CONFIG__ = {
+      SUPABASE_URL: 'https://your-project.supabase.co',
+      SUPABASE_ANON_KEY: 'your-anon-key'
+    };
+  };
+  document.head.appendChild(s);
+})();
