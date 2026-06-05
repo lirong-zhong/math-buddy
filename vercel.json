@@ -3,8 +3,5 @@
   "buildCommand": "node build.js",
   "rewrites": [
     { "source": "/api/chat", "destination": "/api/chat" }
-  ],
-  "builds": [
-    { "src": "api/chat.js", "use": "@vercel/node" }
   ]
 }
