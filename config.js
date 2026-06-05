@@ -1,15 +1,4 @@
-// ============================================================
-// config.js — 部署时加载真实的 config.local.js（不提交到 git）
-// ============================================================
-(function() {
-  var s = document.createElement('script');
-  s.src = '/config.local.js';
-  s.onerror = function() {
-    console.warn('config.local.js not found, using placeholder');
-    window.__MB_CONFIG__ = {
-      SUPABASE_URL: 'https://your-project.supabase.co',
-      SUPABASE_ANON_KEY: 'your-anon-key'
-    };
-  };
-  document.head.appendChild(s);
-})();
+window.__MB_CONFIG__ = {
+  SUPABASE_URL: 'https://cdcilqcwpdnbjrlqkfrm.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkY2lscWN3cGRuYmpybHFrZnJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MTA1NjcsImV4cCI6MjA5NjE4NjU2N30.XHL8LY8q9u1kdPrSLayv5lu0QOmecPkdl5tB6to65s0'
+};
