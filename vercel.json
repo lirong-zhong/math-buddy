@@ -6,8 +6,8 @@
     { "src": "*", "use": "@vercel/static" }
   ],
   "routes": [
-    { "handle": "filesystem" },
     { "src": "/api/chat", "dest": "/api/chat" },
+    { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
