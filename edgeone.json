@@ -1,7 +1,3 @@
 {
-  "functions": {
-    "edge-functions/api/chat.js": {
-      "path": "/api/chat"
-    }
-  }
+  "framework": "none"
 }
